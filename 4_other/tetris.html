@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Super Mario Tetris</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto&display=swap');
+
+        body {
+            background-color: #5c94fc;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            background-color: #1e1e1e;
+            border: 4px solid #000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            box-shadow: 0 0 20px #000;
+            border-radius: 10px;
+        }
+        #start-screen, #ranking-screen, #game-over-screen, #instructions-screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+        .active {
+            display: flex;
+        }
+        input, select, button {
+            margin: 10px;
+            padding: 10px;
+            font-size: 16px;
+            font-family: 'Roboto', sans-serif;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        input:focus, select:focus, button:focus {
+            outline: none;
+        }
+        button:hover {
+            background-color: #333;
+            color: #fff;
+        }
+        #game {
+            position: relative;
+            width: 200px;
+            height: 400px;
+            background-color: #000;
+            border: 2px solid #fff;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #score, #level {
+            color: #fff;
+            margin: 5px;
+            font-size: 18px;
+        }
+        table {
+            border-collapse: collapse;
+            color: #fff;
+            width: 100%;
+            max-width: 300px;
+        }
+        th, td {
+            border: 1px solid #fff;
+            padding: 8px 12px;
+        }
+        th {
+            background-color: #333;
+        }
+        tr:nth-child(even) {
+            background-color: #444;
+        }
+        tr:nth-child(odd) {
+            background-color: #555;
+        }
+        /* Instructions Styling */
+        #instructions {
+            color: #fff;
+            margin: 10px 0;
+            max-width: 300px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        /* Header Styling */
+        h1, h2 {
+            font-family: 'Press Start 2P', cursive;
+            color: #ffcc00;
+            margin: 10px 0;
+        }
+        /* Responsive Design */
+        @media (max-width: 500px) {
+            #game-container {
+                padding: 10px;
+            }
+            #game {
+                width: 150px;
+                height: 300px;
+            }
+            canvas {
+                width: 150px;
+                height: 300px;
+            }
+            table {
+                max-width: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- Start Screen -->
+        <div id="start-screen" class="active">
+            <h1>Super Mario Tetris</h1>
+            <input type="text" id="player-name" placeholder="Enter Your Name" maxlength="10">
+            <select id="level-select">
+                <option value="easy">Easy</option>
+                <option value="normal" selected>Normal</option>
+                <option value="hard">Hard</option>
+            </select>
+            <button id="start-button">Start Campaign</button>
+            <button id="instructions-button">Instructions</button>
+        </div>
+        
+        <!-- Instructions Screen -->
+        <div id="instructions-screen">
+            <h2>How to Play</h2>
+            <div id="instructions">
+                <p><strong>Controls:</strong></p>
+                <p>🡄 <strong>Left Arrow:</strong> Move Left</p>
+                <p>🡆 <strong>Right Arrow:</strong> Move Right</p>
+                <p>🡅 <strong>Up Arrow:</strong> Rotate</p>
+                <p>🡇 <strong>Down Arrow:</strong> Move Down Faster</p>
+                <p><strong>Space Bar:</strong> Drop Piece</p>
+                <p><strong>P:</strong> Pause/Resume Game</p>
+            </div>
+            <button id="back-button-instructions">Back</button>
+        </div>
+        
+        <!-- Game Screen -->
+        <div id="game-screen" style="display: none;">
+            <div style="display: flex; justify-content: space-between; width: 200px;">
+                <div id="score">Score: 0</div>
+                <div id="level">Level: Normal</div>
+            </div>
+            <div id="game">
+                <canvas id="game-canvas" width="200" height="400"></canvas>
+            </div>
+            <div>
+                <button id="pause-button">Pause</button>
+            </div>
+        </div>
+        
+        <!-- Game Over Screen -->
+        <div id="game-over-screen">
+            <h2>Game Over!</h2>
+            <div id="final-score">Your Score: 0</div>
+            <button id="restart-button">View Rankings</button>
+        </div>
+        
+        <!-- Ranking Screen -->
+        <div id="ranking-screen">
+            <h2>High Scores</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>Score</th>
+                    </tr>
+                </thead>
+                <tbody id="ranking-table">
+                    <!-- Rankings will be inserted here -->
+                </tbody>
+            </table>
+            <button id="back-button">Back to Start</button>
+        </div>
+    </div>
+
+    <script>
+        // Game Variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const ROW = 20;
+        const COL = 10;
+        const BLOCK_SIZE = 20;
+        const COLORS = [
+            null,
+            '#FF0D72',
+            '#0DC2FF',
+            '#0DFF72',
+            '#F538FF',
+            '#FF8E0D',
+            '#FFE138',
+            '#3877FF'
+        ];
+
+        const SHAPES = [
+            [],
+            [[1,1,1,1]], // I
+            [
+                [2,2],
+                [2,2]
+            ], // O
+            [
+                [0,3,0],
+                [3,3,3]
+            ], // T
+            [
+                [0,4,4],
+                [4,4,0]
+            ], // S
+            [
+                [5,5,0],
+                [0,5,5]
+            ], // Z
+            [
+                [6,0,0],
+                [6,6,6]
+            ], // J
+            [
+                [0,0,7],
+                [7,7,7]
+            ]  // L
+        ];
+
+        let board = Array.from({length: ROW}, () => Array(COL).fill(0));
+        let current, next, timer, score = 0, level = 1, gameOver = false;
+        let playerName = 'Player';
+        let gamePaused = false;
+        let dropInterval = 1000;
+        let rankData = [];
+
+        // Sound Variables
+        let audioContext;
+        let menuOscillators = [];
+        let gameOscillators = [];
+        let menuPlaying = false;
+        let gamePlaying = false;
+
+        // Initialize Game
+        document.getElementById('start-button').addEventListener('click', startGame);
+        document.getElementById('pause-button').addEventListener('click', togglePause);
+        document.getElementById('restart-button').addEventListener('click', showRankings);
+        document.getElementById('back-button').addEventListener('click', backToStart);
+        document.getElementById('instructions-button').addEventListener('click', showInstructions);
+        document.getElementById('back-button-instructions').addEventListener('click', hideInstructions);
+
+        function startGame() {
+            playerName = document.getElementById('player-name').value || 'Player';
+            const levelSelect = document.getElementById('level-select').value;
+            switch(levelSelect) {
+                case 'easy': level = 1; dropInterval = 1000; break;
+                case 'normal': level = 2; dropInterval = 700; break;
+                case 'hard': level = 3; dropInterval = 400; break;
+            }
+            document.getElementById('level').innerText = 'Level: ' + levelSelect.charAt(0).toUpperCase() + levelSelect.slice(1);
+            document.getElementById('score').innerText = 'Score: 0';
+            board = Array.from({length: ROW}, () => Array(COL).fill(0));
+            current = randomPiece();
+            next = randomPiece();
+            score = 0;
+            gameOver = false;
+            gamePaused = false;
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('ranking-screen').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'none';
+            document.getElementById('instructions-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            timer = setInterval(gameLoop, dropInterval);
+            draw();
+            playGameMusic();
+            stopMenuMusic();
+        }
+
+        function showInstructions() {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('instructions-screen').style.display = 'flex';
+            stopMenuMusic();
+        }
+
+        function hideInstructions() {
+            document.getElementById('instructions-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+            playMenuMusic();
+        }
+
+        function gameLoop() {
+            if (!gamePaused) {
+                moveDown();
+            }
+        }
+
+        function togglePause() {
+            if (gameOver) return;
+            gamePaused = !gamePaused;
+            document.getElementById('pause-button').innerText = gamePaused ? 'Resume' : 'Pause';
+            if (gamePaused) {
+                stopGameMusic();
+            } else {
+                playGameMusic();
+            }
+        }
+
+        function randomPiece() {
+            const index = Math.floor(Math.random() * (SHAPES.length -1)) +1;
+            const shape = SHAPES[index];
+            return {
+                shape: shape,
+                x: Math.floor(COL / 2) - Math.ceil(shape[0].length / 2),
+                y: 0,
+                color: index
+            };
+        }
+
+        function collide(board, piece) {
+            for (let y = 0; y < piece.shape.length; y++) {
+                for (let x = 0; x < piece.shape[y].length; x++) {
+                    if (piece.shape[y][x]) {
+                        let newX = piece.x + x;
+                        let newY = piece.y + y;
+                        if (newX < 0 || newX >= COL || newY >= ROW) return true;
+                        if (newY >=0 && board[newY][newX]) return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function merge(board, piece) {
+            piece.shape.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value) {
+                        board[piece.y + y][piece.x + x] = value;
+                    }
+                });
+            });
+        }
+
+        function rotate(piece) {
+            const rotated = piece.shape[0].map((val, index) => piece.shape.map(row => row[index]).reverse());
+            const rotatedPiece = { ...piece, shape: rotated };
+            if (!collide(board, rotatedPiece)) {
+                piece.shape = rotated;
+            }
+            draw();
+        }
+
+        function move(dir) {
+            const moved = { ...current, x: current.x + dir };
+            if (!collide(board, moved)) {
+                current.x += dir;
+            }
+            draw();
+        }
+
+        function moveDown() {
+            const moved = { ...current, y: current.y +1 };
+            if (!collide(board, moved)) {
+                current.y +=1;
+            } else {
+                merge(board, current);
+                clearLines();
+                current = next;
+                next = randomPiece();
+                if (collide(board, current)) {
+                    endGame();
+                }
+            }
+            draw();
+        }
+
+        function clearLines() {
+            let lines = 0;
+            board = board.filter(row => {
+                if (row.every(cell => cell !==0)) {
+                    lines++;
+                    return false;
+                }
+                return true;
+            });
+            while (board.length < ROW) {
+                board.unshift(Array(COL).fill(0));
+            }
+            if (lines >0) {
+                score += lines * 100;
+                document.getElementById('score').innerText = 'Score: ' + score;
+                // Increase level based on score
+                if (score >= level * 500) {
+                    level++;
+                    dropInterval = dropInterval > 200 ? dropInterval - 100 : dropInterval;
+                    clearInterval(timer);
+                    timer = setInterval(gameLoop, dropInterval);
+                    document.getElementById('level').innerText = 'Level: ' + getLevelName();
+                }
+            }
+        }
+
+        function getLevelName() {
+            switch(level) {
+                case 1: return 'Easy';
+                case 2: return 'Normal';
+                case 3: return 'Hard';
+                default: return 'Normal';
+            }
+        }
+
+        function endGame() {
+            clearInterval(timer);
+            gameOver = true;
+            document.getElementById('game-screen').style.display = 'none';
+            document.getElementById('game-over-screen').style.display = 'flex';
+            document.getElementById('final-score').innerText = 'Your Score: ' + score;
+            saveScore();
+            stopGameMusic();
+            playMenuMusic();
+        }
+
+        function saveScore() {
+            const stored = localStorage.getItem('tetrisScores');
+            rankData = stored ? JSON.parse(stored) : [];
+            rankData.push({name: playerName, score: score});
+            rankData.sort((a,b) => b.score - a.score);
+            rankData = rankData.slice(0,10);
+            localStorage.setItem('tetrisScores', JSON.stringify(rankData));
+        }
+
+        function showRankings() {
+            document.getElementById('game-over-screen').style.display = 'none';
+            document.getElementById('ranking-screen').style.display = 'flex';
+            loadRankings();
+        }
+
+        function loadRankings() {
+            const stored = localStorage.getItem('tetrisScores');
+            rankData = stored ? JSON.parse(stored) : [];
+            const table = document.getElementById('ranking-table');
+            table.innerHTML = '';
+            rankData.forEach((entry, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${index +1}</td><td>${entry.name}</td><td>${entry.score}</td>`;
+                table.appendChild(tr);
+            });
+        }
+
+        function backToStart() {
+            document.getElementById('ranking-screen').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'flex';
+        }
+
+        function draw() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Draw board
+            board.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    if (cell) {
+                        ctx.fillStyle = COLORS[cell];
+                        ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.strokeStyle = '#111';
+                        ctx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    }
+                });
+            });
+            // Draw current piece
+            current.shape.forEach((row, y) => {
+                row.forEach((cell, x) => {
+                    if (cell) {
+                        ctx.fillStyle = COLORS[cell];
+                        ctx.fillRect((current.x + x) * BLOCK_SIZE, (current.y + y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                        ctx.strokeStyle = '#111';
+                        ctx.strokeRect((current.x + x) * BLOCK_SIZE, (current.y + y) * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    }
+                });
+            });
+        }
+
+        // Handle Keyboard Input
+        document.addEventListener('keydown', event => {
+            if (gameOver || !document.getElementById('game-screen').style.display === 'block') return;
+            if (gamePaused) return;
+            switch(event.key) {
+                case 'ArrowLeft':
+                    move(-1);
+                    break;
+                case 'ArrowRight':
+                    move(1);
+                    break;
+                case 'ArrowDown':
+                    moveDown();
+                    break;
+                case 'ArrowUp':
+                    rotate(current);
+                    break;
+                case ' ':
+                    drop();
+                    break;
+            }
+        });
+
+        function drop() {
+            while (!collide(board, { ...current, y: current.y +1 })) {
+                current.y +=1;
+            }
+            moveDown();
+        }
+
+        // Initialize Start Screen
+        document.getElementById('start-screen').style.display = 'flex';
+
+        // Soundtrack Implementation using Web Audio API
+        function initAudio() {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        function playMenuMusic() {
+            if (menuPlaying) return;
+            menuOscillators = [];
+            const notes = [
+                {freq: 261.63, duration: 0.5}, // C4
+                {freq: 293.66, duration: 0.5}, // D4
+                {freq: 329.63, duration: 0.5}, // E4
+                {freq: 349.23, duration: 0.5}, // F4
+                {freq: 392.00, duration: 0.5}, // G4
+                {freq: 440.00, duration: 0.5}, // A4
+                {freq: 493.88, duration: 0.5}, // B4
+                {freq: 523.25, duration: 0.5}  // C5
+            ];
+            let currentTime = audioContext.currentTime;
+
+            notes.forEach(note => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(note.freq, currentTime);
+                gainNode.gain.setValueAtTime(0.1, currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start(currentTime);
+                oscillator.stop(currentTime + note.duration);
+                currentTime += note.duration;
+                menuOscillators.push(oscillator);
+            });
+
+            // Loop the menu music
+            setInterval(() => {
+                playMenuMusic();
+            }, notes.length * 500);
+            menuPlaying = true;
+        }
+
+        function stopMenuMusic() {
+            menuOscillators.forEach(osc => osc.stop());
+            menuOscillators = [];
+            menuPlaying = false;
+        }
+
+        function playGameMusic() {
+            if (gamePlaying) return;
+            gameOscillators = [];
+            const notes = [
+                {freq: 392.00, duration: 0.3}, // G4
+                {freq: 440.00, duration: 0.3}, // A4
+                {freq: 493.88, duration: 0.3}, // B4
+                {freq: 523.25, duration: 0.3}, // C5
+                {freq: 493.88, duration: 0.3}, // B4
+                {freq: 440.00, duration: 0.3}, // A4
+                {freq: 392.00, duration: 0.3}, // G4
+                {freq: 349.23, duration: 0.3}  // F4
+            ];
+            let currentTime = audioContext.currentTime;
+
+            notes.forEach(note => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.type = 'square';
+                oscillator.frequency.setValueAtTime(note.freq, currentTime);
+                gainNode.gain.setValueAtTime(0.15, currentTime);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start(currentTime);
+                oscillator.stop(currentTime + note.duration);
+                currentTime += note.duration;
+                gameOscillators.push(oscillator);
+            });
+
+            // Loop the game music
+            setInterval(() => {
+                playGameMusic();
+            }, notes.length * 300);
+            gamePlaying = true;
+        }
+
+        function stopGameMusic() {
+            gameOscillators.forEach(osc => osc.stop());
+            gameOscillators = [];
+            gamePlaying = false;
+        }
+
+        // Initialize Audio on Page Load
+        window.onload = () => {
+            initAudio();
+            playMenuMusic();
+        };
+    </script>
+</body>
+</html>
